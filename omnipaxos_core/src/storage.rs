@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     ops::{Bound, RangeBounds},
 };
+use serde::{Serialize, Deserialize};
 
 /// Type of the entries stored in the log.
 pub trait Entry: Clone + Debug {}
@@ -30,7 +31,7 @@ impl StopSignEntry {
 }
 
 /// A StopSign entry that marks the end of a configuration. Used for reconfiguration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StopSign {
     /// The identifier for the new configuration.
     pub config_id: ConfigurationId,
@@ -59,7 +60,7 @@ impl PartialEq for StopSign {
 
 /// Snapshot type. A `Complete` snapshot contains all snapshotted data while `Delta` has snapshotted changes since an earlier snapshot.
 #[allow(missing_docs)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SnapshotType<T, S>
 where
     T: Entry,
