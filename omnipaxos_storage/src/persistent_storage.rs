@@ -89,7 +89,9 @@ impl StopSignStorage {
 /// * `sled_options` : Options for the sled store, enabled by default
 pub struct PersistentStorageConfig {
     path: Option<String>,
-    commitlog_options: LogOptions,
+    commitlog_segment_max_bytes: usize,
+    commitlog_message_max_bytes: usize,
+    commitlog_index_max_items: usize,
     #[cfg(feature = "rocksdb")]
     rocksdb_options: Options,
     #[cfg(feature = "sled")]
@@ -108,13 +110,33 @@ impl PersistentStorageConfig {
     }
 
     /// Returns the options for the Commitlog.
-    pub fn get_commitlog_options(&self) -> LogOptions {
-        self.commitlog_options.clone()
+    pub fn get_commitlog_segment_max_bytes(&self) -> usize {
+        self.commitlog_segment_max_bytes
     }
 
     /// Sets the options for the Commitlog.
-    pub fn set_commitlog_options(&mut self, commitlog_opts: LogOptions) {
-        self.commitlog_options = commitlog_opts;
+    pub fn set_commitlog_segment_max_bytes(&mut self, num: usize) {
+        self.commitlog_segment_max_bytes = num;
+    }
+
+    /// Returns the options for the Commitlog.
+    pub fn get_commitlog_message_max_bytes(&self) -> usize {
+        self.commitlog_message_max_bytes
+    }
+
+    /// Sets the options for the Commitlog.
+    pub fn set_commitlog_message_max_bytes(&mut self, num: usize) {
+        self.commitlog_message_max_bytes = num;
+    }
+
+    /// Returns the options for the Commitlog.
+    pub fn get_commitlog_index_max_items(&self) -> usize {
+        self.commitlog_index_max_items
+    }
+
+    /// Sets the options for the Commitlog.
+    pub fn set_commitlog_index_max_items(&mut self, num: usize) {
+        self.commitlog_index_max_items = num;
     }
 
     #[cfg(feature = "rocksdb")]
@@ -143,20 +165,36 @@ impl PersistentStorageConfig {
 
     #[cfg(feature = "rocksdb")]
     /// Creates a configuration for `PersistentStorage` with the given path and options for Commitlog and rocksDB
-    pub fn with(path: String, commitlog_options: LogOptions, rocksdb_options: Options) -> Self {
+    pub fn with(
+        path: String,
+        commitlog_segment_max_bytes: usize,
+        commitlog_message_max_bytes: usize,
+        commitlog_index_max_items: usize,
+        rocksdb_options: Options
+    ) -> Self {
         Self {
             path: Some(path),
-            commitlog_options,
+            commitlog_segment_max_bytes,
+            commitlog_message_max_bytes,
+            commitlog_index_max_items,
             rocksdb_options,
         }
     }
 
     #[cfg(feature = "sled")]
     /// Creates a configuration for `PersistentStorage` with the given path and options for Commitlog and sled
-    pub fn with(path: String, commitlog_options: LogOptions, sled_options: Config) -> Self {
+    pub fn with(
+        path: String,
+        commitlog_segment_max_bytes: usize,
+        commitlog_message_max_bytes: usize,
+        commitlog_index_max_items: usize,
+        sled_options: Config
+    ) -> Self {
         Self {
             path: Some(path),
-            commitlog_options,
+            commitlog_segment_max_bytes,
+            commitlog_message_max_bytes,
+            commitlog_index_max_items,
             sled_options,
         }
     }
@@ -164,11 +202,11 @@ impl PersistentStorageConfig {
 
 impl Default for PersistentStorageConfig {
     fn default() -> Self {
-        let commitlog_options = LogOptions::new(format!("{DEFAULT}{COMMITLOG}"));
-
         Self {
             path: Some(DEFAULT.to_string()),
-            commitlog_options,
+            commitlog_segment_max_bytes: 1024 * 1024 * 1024,
+            commitlog_message_max_bytes: 1024 * 1024,
+            commitlog_index_max_items: 100_000,
             #[cfg(feature = "rocksdb")]
             rocksdb_options: {
                 let mut opts = Options::default();
@@ -193,6 +231,8 @@ where
     commitlog: CommitLog,
     /// The path to the directory containing a commitlog
     log_path: String,
+    /// The options object that is used to construct the CommitLog
+    log_options: LogOptions,
     /// Local RocksDB key-value store, must be enabled as a feature
     #[cfg(feature = "rocksdb")]
     rocksdb: DB,
@@ -210,12 +250,17 @@ impl<T: Entry, S: Snapshot<T>> PersistentStorage<T, S> {
     pub fn open(storage_config: PersistentStorageConfig) -> Self {
         let path = storage_config.path.expect("No path found in config");
 
-        let commitlog =
-            CommitLog::new(storage_config.commitlog_options).expect("Failed to create Commitlog");
+        let log_path = format!("{path}{COMMITLOG}");
+        let mut log_options = LogOptions::new(log_path.clone());
+        log_options.segment_max_bytes(storage_config.commitlog_segment_max_bytes);
+        log_options.message_max_bytes(storage_config.commitlog_message_max_bytes);
+        log_options.index_max_items(storage_config.commitlog_index_max_items);
+        let commitlog = CommitLog::new(log_options.clone()).expect("Failed to create Commitlog");
 
         Self {
             commitlog,
-            log_path: format!("{path}{COMMITLOG}"),
+            log_path,
+            log_options,
             #[cfg(feature = "rocksdb")]
             rocksdb: {
                 DB::open(&storage_config.rocksdb_options, format!("{path}{DATABASE}"))
@@ -281,7 +326,7 @@ where
     }
 
     fn append_on_prefix(&mut self, from_idx: u64, entries: Vec<T>) -> u64 {
-        if from_idx > 0 {
+        if from_idx > 0 && from_idx < self.get_log_len() {
             self.commitlog
                 .truncate(from_idx)
                 .expect("Failed to truncate log");
@@ -291,7 +336,7 @@ where
 
     fn get_entries(&self, from: u64, to: u64) -> Vec<T> {
         // Check if the commit log has entries up to the requested endpoint.
-        if to > self.commitlog.next_offset() {
+        if to > self.commitlog.next_offset() || from >= to {
             return vec![]; // Do an early return
         }
 
@@ -592,8 +637,7 @@ where
     fn trim(&mut self, trimmed_idx: u64) {
         let trimmed_log: Vec<T> = self.get_entries(trimmed_idx, self.commitlog.next_offset()); // get the log entries from 'trimmed_idx' to latest
         let _ = std::fs::remove_dir_all(&self.log_path); // remove old log
-        let c_opts = LogOptions::new(&self.log_path);
-        self.commitlog = CommitLog::new(c_opts).expect("Failed to recreate commitlog"); // create new commitlog
+        self.commitlog = CommitLog::new(self.log_options.clone()).expect("Failed to recreate commitlog"); // create new commitlog
         self.append_entries(trimmed_log);
     }
 }
