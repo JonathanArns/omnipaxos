@@ -318,6 +318,7 @@ where
     ) -> StorageResult<usize> {
         self.state_cache.accepted_round = accepted_round;
         self.state_cache.decided_idx = decided_idx;
+        self.state_cache.accepted_idx = self.state_cache.accepted_idx.max(decided_idx);
         let mut sync_txn: Vec<StorageOp<T>> = vec![
             StorageOp::SetAcceptedRound(accepted_round),
             StorageOp::SetDecidedIndex(decided_idx),
