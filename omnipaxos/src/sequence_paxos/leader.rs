@@ -399,6 +399,7 @@ where
     }
 
     pub(crate) fn flush_batch_leader(&mut self) {
+        println!("ONE");
         let accepted_metadata = self
             .internal_storage
             .flush_batch_and_get_entries()
