@@ -145,11 +145,13 @@ where
         }
         if new_decided_idx > self.internal_storage.get_accepted_idx() {
             let new_accepted_idx = self.internal_storage.flush_batch().expect(WRITE_ERROR_MSG);
+            println!("OP: update_decided_idx_and_get_accepted_idx 1");
             self.internal_storage
                 .set_decided_idx(new_decided_idx.min(new_accepted_idx))
                 .expect(WRITE_ERROR_MSG);
             Some(new_accepted_idx)
         } else {
+            println!("OP: update_decided_idx_and_get_accepted_idx 2");
             self.internal_storage
                 .set_decided_idx(new_decided_idx)
                 .expect(WRITE_ERROR_MSG);

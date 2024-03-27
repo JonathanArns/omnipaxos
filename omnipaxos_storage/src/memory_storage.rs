@@ -39,7 +39,10 @@ where
                     self.append_on_prefix(from_idx, entries)?
                 }
                 StorageOp::SetPromise(bal) => self.set_promise(bal)?,
-                StorageOp::SetDecidedIndex(idx) => self.set_decided_idx(idx)?,
+                StorageOp::SetDecidedIndex(idx) => {
+                    println!("OP: write_atomically");
+                    self.set_decided_idx(idx)?
+                },
                 StorageOp::SetAcceptedRound(bal) => self.set_accepted_round(bal)?,
                 StorageOp::SetCompactedIdx(idx) => self.set_compacted_idx(idx)?,
                 StorageOp::Trim(idx) => self.trim(idx)?,
