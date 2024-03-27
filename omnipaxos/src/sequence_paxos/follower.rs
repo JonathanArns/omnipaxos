@@ -224,7 +224,10 @@ where
         let msg_status = self.current_seq_num.check_msg_status(seq_num);
         match msg_status {
             MessageStatus::Expected => self.current_seq_num = seq_num,
-            MessageStatus::DroppedPreceding => self.reconnected(from),
+            MessageStatus::DroppedPreceding => {
+                println!("OP: DroppedPreceding... reconnected");
+                self.reconnected(from) 
+            },
             MessageStatus::Outdated => (),
         };
         msg_status

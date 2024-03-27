@@ -332,6 +332,7 @@ where
     /// Handles re-establishing a connection to a previously disconnected peer.
     /// This should only be called if the underlying network implementation indicates that a connection has been re-established.
     pub(crate) fn reconnected(&mut self, pid: NodeId) {
+        println!("OP: reconnected !!!");
         if pid == self.pid {
             return;
         } else if pid == self.get_current_leader() {
