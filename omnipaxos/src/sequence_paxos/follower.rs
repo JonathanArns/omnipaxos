@@ -228,7 +228,7 @@ where
                 println!("OP: DroppedPreceding... reconnected");
                 self.reconnected(from) 
             },
-            MessageStatus::Outdated => (),
+            MessageStatus::Outdated => println!("OP: outdated!"),
         };
         msg_status
     }
