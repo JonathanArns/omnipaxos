@@ -72,6 +72,7 @@ where
     }
 
     fn set_decided_idx(&mut self, ld: usize) -> StorageResult<()> {
+        println!("OP: Decided idx: {}", ld);
         self.ld = ld;
         Ok(())
     }
