@@ -81,6 +81,7 @@ where
 
     fn forward_buffered_proposals(&mut self) {
         let proposals = std::mem::take(&mut self.buffered_proposals);
+        println!("OP: forward_proposals: {:?}", proposals);
         if !proposals.is_empty() {
             self.forward_proposals(proposals);
         }
